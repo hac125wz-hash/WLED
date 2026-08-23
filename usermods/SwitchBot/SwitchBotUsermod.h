@@ -16,7 +16,7 @@ public:
   SwitchBotUsermod();
   void setup() override;
   void loop() override;
-  void addToJsonInfo(JsonObject &root) override;
+  bool addToJsonInfo(JsonObject &root) override;
   void readFromConfig(JsonObject &root) override;
   void addToConfig(JsonObject &root) override;
 };

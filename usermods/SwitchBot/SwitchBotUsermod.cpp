@@ -1,4 +1,6 @@
 #include "SwitchBotUsermod.h"
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 
 SwitchBotUsermod::SwitchBotUsermod()
 : enabled(true), apiToken(""), deviceId(""), pollInterval(60000), lastMillis(0), lastStatus("unknown")
@@ -53,13 +55,14 @@ void SwitchBotUsermod::addToJsonInfo(JsonObject &root) {
   arr.add(F("status"));
 }
 
-void SwitchBotUsermod::readFromConfig(JsonObject &root) {
+bool SwitchBotUsermod::readFromConfig(JsonObject &root) {
   JsonObject um = root["SwitchBot"];
   if (um.isNull()) return;
   apiToken = um["apiToken"] | apiToken;
   deviceId = um["deviceId"] | deviceId;
   pollInterval = um["pollInterval"] | pollInterval;
   enabled = um["enabled"] | enabled;
+retun true;
 }
 
 void SwitchBotUsermod::addToConfig(JsonObject &root) {
