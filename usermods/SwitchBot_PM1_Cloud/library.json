@@ -1,5 +1,5 @@
 {
-  "name": "SwitchBot PM1 Cloud Control",
+  "name": "SwitchBot",
   "version": "1.0.0",
   "build": { "libArchive": false },
   "dependencies": {
