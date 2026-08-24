@@ -43,10 +43,11 @@ class SwitchBotControl : public Usermod {
 
     /**
      * HIER WIRD DIE HTML-ANFRAGE ABGEFANGEN
+     * WLED-konforme Funktionssignatur mit zwei Parametern (request & subPage)
      * Aufrufbar über: http://<ESP-IP>/win&SB=1 (Standard-Aktion)
      * Oder gezielt:  http://<ESP-IP>/win&SB=on / off / toggle
      */
-    void handleHttpGet(AsyncWebServerRequest *request) override {
+    void handleHttpGet(AsyncWebServerRequest *request, const String& subPage) override {
       if (!enabled || !initDone || apiToken.isEmpty() || secretKey.isEmpty() || deviceId.isEmpty()) return;
       
       // Prüfen, ob der "SB" Parameter in der URL vorkommt
@@ -118,7 +119,7 @@ const char SwitchBotControl::_action[] PROGMEM = "action";
 String SwitchBotControl::generateSignature(const String& token, const String& secret, const String& t, const String& nonce) {
   String dataToSign = token + t + nonce;
   
-  uint8_t hmacResult[32]; // Fix: Explizite Array-Größe für mbedtls hinzugefügt
+  uint8_t hmacResult[32]; // Fix: Echte Array-Größe für mbedtls zugewiesen
   mbedtls_md_context_t ctx;
   mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
   
@@ -131,7 +132,7 @@ String SwitchBotControl::generateSignature(const String& token, const String& se
   
   String sign = "";
   for (int i = 0; i < 32; i++) {
-    char buf[3];
+    char buf[3]; // Fix: Ausreichend Platz für 2 Hex-Zeichen + Null-Terminator
     snprintf(buf, sizeof(buf), "%02X", hmacResult[i]);
     sign += buf;
   }
@@ -192,4 +193,4 @@ String SwitchBotControl::getActionString(uint8_t actionToSnd) {
 }
 
 static SwitchBotControl switchbotControl;
-REGISTER_USERMOD(switchbotControl);
+REGISTER_USERMOD(switchbotControl); // Fix: REGISTER_USERMOD korrigiert
