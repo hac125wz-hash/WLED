@@ -10,10 +10,5 @@
       "-D USERMOD_SWITCHBOT"
     ]
   },
-  "dependencies": {
-    "WiFi": "",
-    "WiFiClientSecure": "",
-    "HTTPClient": ""
-  },
-  "libLDFMode": "deep+"
+  "dependencies": {},
 }
