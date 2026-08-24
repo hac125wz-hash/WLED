@@ -1,4 +1,13 @@
 {
-  "name": "multi_relay",
-  "build": { "libArchive": false }
+  "name": "SwitchBot",
+  "version": "1.0.0",
+  "description": "SwitchBot Integration fuer WLED",
+  "frameworks": "arduino",
+  "platforms": [ "espressif32", "espressif8266" ],
+  "build": {
+    "flags": [
+      "-D USERMOD_SWITCHBOT"
+    ]
+  },
+  "dependencies": {}
 }
