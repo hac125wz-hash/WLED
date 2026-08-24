@@ -1,8 +1,0 @@
-{
-  "name": "SwitchBot",
-  "version": "1.0.0",
-  "build": { "libArchive": false },
-  "dependencies": {
-    "ArduinoJson": "6.21.2"
-  }
-}
