@@ -1,21 +1,16 @@
 #include "wled.h"
-
-/*
- * SwitchBot Control Usermod
- * 
- * This usermod allows controlling SwitchBot devices via button press
- * Supports local control via SwitchBot Hub API
- */
+#include <HTTPClient.h>
+#include <mbedtls/md.h> // Integrierte Krypto-Bibliothek für den Secret Key (HMAC-SHA256)
 
 #ifndef SWITCHBOT_MAX_DEVICES
   #define SWITCHBOT_MAX_DEVICES 4
 #endif
 
 typedef struct switchbot_device_t {
-  String deviceId;        // SwitchBot device ID
-  uint8_t buttonPin;      // Which button triggers this device (-1 = unused)
+  String deviceId;        
+  uint8_t buttonPin;      
   uint8_t action;         // 0=toggle, 1=on, 2=off
-  bool enabled;           // Is this device enabled
+  bool enabled;           
 } SwitchBotDevice;
 
 class SwitchBotControl : public Usermod {
@@ -24,79 +19,59 @@ class SwitchBotControl : public Usermod {
     bool enabled = false;
     bool initDone = false;
     
-    // Configuration
-    String hubIP = "";                                    // SwitchBot Hub IP address
-    String apiToken = "";                                 // API token for authentication
+    // Konfiguration erweitert um Secret Key
+    String apiToken = "";                                 
+    String secretKey = "";                                
     
     SwitchBotDevice devices[SWITCHBOT_MAX_DEVICES];
     unsigned long lastRequestTime = 0;
-    uint16_t minRequestInterval = 1000;                   // Mindestabstand zwischen API-Sende-Befehlen (ms)
+    uint16_t minRequestInterval = 2000; // 2 Sekunden Schutzabstand wegen Cloud-Latenz
     
     static const char _name[];
     static const char _enabled[];
-    static const char _hubIP[];
     static const char _apiToken[];
+    static const char _secretKey[];
     static const char _deviceId[];
     static const char _buttonPin[];
     static const char _action[];
 
-    // Private methods
     bool sendSwitchBotCommand(const String& deviceId, uint8_t action);
     String getActionString(uint8_t action);
+    String generateSignature(const String& token, const String& secret, const String& t, const String& nonce);
 
   public:
     inline void enable(bool en) { enabled = en; }
     inline bool isEnabled() { return enabled; }
 
-    uint16_t getId() override {
-      return USERMOD_ID_UNSPECIFIED;
-    }
+    uint16_t getId() override { return USERMOD_ID_UNSPECIFIED; }
 
     void setup() override {
       for (int i = 0; i < SWITCHBOT_MAX_DEVICES; i++) {
         devices[i].deviceId = "";
-        devices[i].buttonPin = 255;  // 255 = ungenutzt
-        devices[i].action = 0;       // toggle
+        devices[i].buttonPin = 255;  
+        devices[i].action = 0;       
         devices[i].enabled = false;
       }
       initDone = true;
     }
 
-    void connected() override {
-      DEBUG_PRINTLN(F("SwitchBot: WiFi connected"));
-    }
+    void connected() override {}
+    void loop() override {}
 
-    /* 
-     * Der loop() bleibt leer! Das spart enorme Rechenleistung, 
-     * da wir stattdessen Event-basiert arbeiten.
-     */
-    void loop() override {
-      // Leer gelassen für maximale Performance
-    }
-
-    /**
-     * handleButton() - Event-basierte Tasterabfrage (Reagiert nur bei Klick!)
-     */
     bool handleButton(uint8_t b) override {
-      if (!enabled || !initDone || hubIP.isEmpty()) return false;
+      if (!enabled || !initDone || apiToken.isEmpty() || secretKey.isEmpty()) return false;
       
       bool handled = false;
-      
-      // Prüfen, ob der gedrückte Button einem SwitchBot-Gerät zugeordnet ist
       for (int i = 0; i < SWITCHBOT_MAX_DEVICES; i++) {
         if (devices[i].enabled && devices[i].buttonPin == b) {
-          
-          // Spam-Schutz: Verhindert Mehrfach-Auslösungen beim Prellen des Tasters
           if (millis() - lastRequestTime > minRequestInterval) {
             sendSwitchBotCommand(devices[i].deviceId, devices[i].action);
             lastRequestTime = millis();
           }
-          
-          handled = true; // WLED mitteilen, dass wir den Klick verarbeitet haben
+          handled = true; 
           break;
         }
       }
-      
       return handled; 
     }
 
@@ -111,14 +86,15 @@ class SwitchBotControl : public Usermod {
         if (devices[i].enabled) activeDevices++;
       }
       info.add(String(activeDevices));
-      info.add(F(" devices"));
+      info.add(F(" aktiv"));
     }
 
+    // Speichert den Secret Key in die cfg.json
     void addToConfig(JsonObject& root) override {
       JsonObject top = root.createNestedObject(FPSTR(_name));
       top[FPSTR(_enabled)] = enabled;
-      top[FPSTR(_hubIP)] = hubIP;
       top[FPSTR(_apiToken)] = apiToken;
+      top[FPSTR(_secretKey)] = secretKey; // Hinzugefügt
       
       for (int i = 0; i < SWITCHBOT_MAX_DEVICES; i++) {
         String deviceName = F("device_");
@@ -131,13 +107,14 @@ class SwitchBotControl : public Usermod {
       }
     }
 
+    // Lädt den Secret Key aus der cfg.json
     bool readFromConfig(JsonObject& root) override {
       JsonObject top = root[FPSTR(_name)];
       if (top.isNull()) return false;
       
       enabled = top[FPSTR(_enabled)] | false;
-      hubIP = top[FPSTR(_hubIP)] | "";
       apiToken = top[FPSTR(_apiToken)] | "";
+      secretKey = top[FPSTR(_secretKey)] | ""; // Hinzugefügt
       
       for (int i = 0; i < SWITCHBOT_MAX_DEVICES; i++) {
         String deviceName = F("device_");
@@ -154,42 +131,100 @@ class SwitchBotControl : public Usermod {
       return true;
     }
 
+    // Erzeugt die sichtbaren Felder im WLED Webinterface
     void appendConfigData() override {
-      oappend(F("addInfo('SwitchBot:hubIP',1,'Local IP address of SwitchBot Hub');"));
-      oappend(F("addInfo('SwitchBot:apiToken',1,'API token for authentication');"));
+      oappend(F("addInfo('SwitchBot:apiToken',1,'Open API Token von SwitchBot');"));
+      oappend(F("addInfo('SwitchBot:secretKey',1,'Developer Secret Key von SwitchBot');"));
     }
 };
 
 const char SwitchBotControl::_name[] PROGMEM = "SwitchBot";
 const char SwitchBotControl::_enabled[] PROGMEM = "enabled";
-const char SwitchBotControl::_hubIP[] PROGMEM = "hubIP";
 const char SwitchBotControl::_apiToken[] PROGMEM = "apiToken";
+const char SwitchBotControl::_secretKey[] PROGMEM = "secretKey";
 const char SwitchBotControl::_deviceId[] PROGMEM = "deviceId";
 const char SwitchBotControl::_buttonPin[] PROGMEM = "buttonPin";
 const char SwitchBotControl::_action[] PROGMEM = "action";
 
 /**
- * Send command to SwitchBot device via Hub
+ * Berechnet die offizielle SwitchBot v1.1 HMAC-SHA256 Signatur
+ */
+String SwitchBotControl::generateSignature(const String& token, const String& secret, const String& t, const String& nonce) {
+  String dataToSign = token + t + nonce;
+  
+  uint8_t hmacResult[32];
+  mbedtls_md_context_t ctx;
+  mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
+  
+  mbedtls_md_init(&ctx);
+  mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(md_type), 1);
+  mbedtls_md_hmac_starts(&ctx, (const unsigned char*)secret.c_str(), secret.length());
+  mbedtls_md_hmac_update(&ctx, (const unsigned char*)dataToSign.c_str(), dataToSign.length());
+  mbedtls_md_hmac_finish(&ctx, hmacResult);
+  mbedtls_md_free(&ctx);
+  
+  // In Base64 oder Hex konvertieren (SwitchBot verlangt Großbuchstaben-Hex)
+  String sign = "";
+  for (int i = 0; i < 32; i++) {
+    char buf[3];
+    sprintf(buf, "%02X", hmacResult[i]);
+    sign += buf;
+  }
+  return sign;
+}
+
+/**
+ * Sendet den Befehl an die offizielle Cloud API v1.1
  */
 bool SwitchBotControl::sendSwitchBotCommand(const String& deviceId, uint8_t action) {
-  if (deviceId.isEmpty() || hubIP.isEmpty() || !WLED_CONNECTED) {
+  if (deviceId.isEmpty() || apiToken.isEmpty() || secretKey.isEmpty() || !WLED_CONNECTED) {
     return false;
   }
   
-  DEBUG_PRINT(F("SwitchBot: Command triggered for "));
-  DEBUG_PRINTLN(deviceId);
+  // Offizieller API-Endpunkt v1.1 von SwitchBot
+  String url = "https://switch-bot.com" + deviceId + "/commands";
+  
+  // Zeitstempel generieren (WLED hält intern die Systemzeit synchron via NTP)
+  String t = String(toki.getTime() * 1000ULL); 
+  if (t == "0") t = String(millis()); // Fallback falls kein NTP synchronisiert ist
+  
+  String nonce = "WLEDUserMod"; // Beliebiger String als Nonce erlaubt
+  String sign = generateSignature(apiToken, secretKey, t, nonce);
+  
+  StaticJsonDocument<256> doc;
+  doc["command"] = getActionString(action);
+  doc["parameter"] = "default";
+  doc["commandType"] = "command";
+  
+  String payload;
+  serializeJson(doc, payload);
 
-  // WICHTIGER HINWEIS:
-  // Sobald du hier echten HTTP-Sende-Code (z.B. HTTPClient) einbaust,
-  // achte darauf, einen kurzen Timeout (z.B. 1000ms) zu setzen,
-  // damit die LED-Effekte während des Netzwerkaufrufs nicht stocken.
-
-  return true;
+  HTTPClient http;
+  http.begin(url);
+  
+  // Die vier von SwitchBot v1.1 zwingend vorgeschriebenen Header
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Authorization", apiToken);
+  http.addHeader("sign", sign);
+  http.addHeader("t", t);
+  http.addHeader("nonce", nonce);
+  
+  http.setTimeout(2000); 
+  int httpCode = http.POST(payload);
+  
+  if (httpCode > 0) {
+    DEBUG_PRINTF("SwitchBot API HTTP Code: %d\n", httpCode);
+  } else {
+    DEBUG_PRINTF("SwitchBot API Verbindungsfehler: %s\n", http.errorToString(httpCode).c_str());
+  }
+  
+  http.end();
+  return (httpCode == 200);
 }
 
 String SwitchBotControl::getActionString(uint8_t action) {
   switch (action) {
-    case 0: return F("toggle");
+    case 0: return F("toggle"); // Wichtig: Manche Geräte unterstützen kein "toggle", sondern nur turnOn/turnOff
     case 1: return F("turnOn");
     case 2: return F("turnOff");
     default: return F("toggle");
