@@ -42,10 +42,9 @@ class SwitchBotControl : public Usermod {
     void loop() override {}
 
     /**
-     * HIER WIRD DIE HTML-ANFRAGE NATIV ÜBER WLEDS JSON-API ABGEFANGEN
-     * Reagiert auf HTTP-POST/GET an: http://<ESP-IP>/json
+     * Gemeinsame Logik für die Verarbeitung der JSON-Abfrage
      */
-    void handleJsonIn(JsonObject& root) override {
+    void processSwitchBotJson(JsonObject& root) {
       if (!enabled || !initDone || apiToken.isEmpty() || secretKey.isEmpty() || deviceId.isEmpty()) return;
 
       if (root.containsKey("switchbot")) {
@@ -61,6 +60,21 @@ class SwitchBotControl : public Usermod {
           lastRequestTime = millis();
         }
       }
+    }
+
+    /**
+     * HIER WIRD DIE HTML-ANFRAGE NATIV ÜBER WLEDS JSON-API ABGEFANGEN
+     * WLED Versionen mit 1 Parameter
+     */
+    void handleJsonIn(JsonObject& root) override {
+      processSwitchBotJson(root);
+    }
+
+    /**
+     * WLED Versionen mit 2 Parametern
+     */
+    void handleJsonIn(JsonObject& root, JsonObject& changeState) override {
+      processSwitchBotJson(root);
     }
 
     void addToJsonInfo(JsonObject& root) override {
@@ -136,7 +150,7 @@ bool SwitchBotControl::sendSwitchBotCommand(uint8_t actionToSnd) {
     return false;
   }
   
-  // JETZT KORRIGIERT: Offizieller API-Endpunkt v1.1
+  // Offizieller Endpunkt v1.1 von SwitchBot
   String url = "https://switch-bot.com" + deviceId + "/commands";
   
   Toki::Time tm = toki.getTime();
