@@ -89,12 +89,11 @@ class SwitchBotControl : public Usermod {
       info.add(F(" aktiv"));
     }
 
-    // Speichert den Secret Key in die cfg.json
     void addToConfig(JsonObject& root) override {
       JsonObject top = root.createNestedObject(FPSTR(_name));
       top[FPSTR(_enabled)] = enabled;
       top[FPSTR(_apiToken)] = apiToken;
-      top[FPSTR(_secretKey)] = secretKey; // Hinzugefügt
+      top[FPSTR(_secretKey)] = secretKey;
       
       for (int i = 0; i < SWITCHBOT_MAX_DEVICES; i++) {
         String deviceName = F("device_");
@@ -107,14 +106,13 @@ class SwitchBotControl : public Usermod {
       }
     }
 
-    // Lädt den Secret Key aus der cfg.json
     bool readFromConfig(JsonObject& root) override {
       JsonObject top = root[FPSTR(_name)];
       if (top.isNull()) return false;
       
       enabled = top[FPSTR(_enabled)] | false;
       apiToken = top[FPSTR(_apiToken)] | "";
-      secretKey = top[FPSTR(_secretKey)] | ""; // Hinzugefügt
+      secretKey = top[FPSTR(_secretKey)] | "";
       
       for (int i = 0; i < SWITCHBOT_MAX_DEVICES; i++) {
         String deviceName = F("device_");
@@ -131,7 +129,6 @@ class SwitchBotControl : public Usermod {
       return true;
     }
 
-    // Erzeugt die sichtbaren Felder im WLED Webinterface
     void appendConfigData() override {
       oappend(F("addInfo('SwitchBot:apiToken',1,'Open API Token von SwitchBot');"));
       oappend(F("addInfo('SwitchBot:secretKey',1,'Developer Secret Key von SwitchBot');"));
@@ -152,7 +149,7 @@ const char SwitchBotControl::_action[] PROGMEM = "action";
 String SwitchBotControl::generateSignature(const String& token, const String& secret, const String& t, const String& nonce) {
   String dataToSign = token + t + nonce;
   
-  uint8_t hmacResult[32];
+  uint8_t hmacResult[32]; // Fehlerbehebung: Array-Größe explizit definiert
   mbedtls_md_context_t ctx;
   mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
   
@@ -163,7 +160,7 @@ String SwitchBotControl::generateSignature(const String& token, const String& se
   mbedtls_md_hmac_finish(&ctx, hmacResult);
   mbedtls_md_free(&ctx);
   
-  // In Base64 oder Hex konvertieren (SwitchBot verlangt Großbuchstaben-Hex)
+  // In Hex konvertieren (SwitchBot verlangt Großbuchstaben-Hex)
   String sign = "";
   for (int i = 0; i < 32; i++) {
     char buf[3];
@@ -181,14 +178,14 @@ bool SwitchBotControl::sendSwitchBotCommand(const String& deviceId, uint8_t acti
     return false;
   }
   
-  // Offizieller API-Endpunkt v1.1 von SwitchBot
   String url = "https://switch-bot.com" + deviceId + "/commands";
   
-  // Zeitstempel generieren (WLED hält intern die Systemzeit synchron via NTP)
-  String t = String(toki.getTime() * 1000ULL); 
-  if (t == "0") t = String(millis()); // Fallback falls kein NTP synchronisiert ist
+  // Fehlerbehebung: Extrahiert die Sekunden (.sec) aus dem Toki-Objekt, um Rechenfehler zu vermeiden
+  Toki::Time tm = toki.getTime();
+  String t = String((unsigned long long)tm.sec * 1000ULL + tm.ms);
+  if (tm.sec == 0) t = String(millis()); // Fallback falls kein NTP synchronisiert ist
   
-  String nonce = "WLEDUserMod"; // Beliebiger String als Nonce erlaubt
+  String nonce = "WLEDUserMod"; 
   String sign = generateSignature(apiToken, secretKey, t, nonce);
   
   StaticJsonDocument<256> doc;
@@ -202,7 +199,6 @@ bool SwitchBotControl::sendSwitchBotCommand(const String& deviceId, uint8_t acti
   HTTPClient http;
   http.begin(url);
   
-  // Die vier von SwitchBot v1.1 zwingend vorgeschriebenen Header
   http.addHeader("Content-Type", "application/json");
   http.addHeader("Authorization", apiToken);
   http.addHeader("sign", sign);
@@ -224,7 +220,7 @@ bool SwitchBotControl::sendSwitchBotCommand(const String& deviceId, uint8_t acti
 
 String SwitchBotControl::getActionString(uint8_t action) {
   switch (action) {
-    case 0: return F("toggle"); // Wichtig: Manche Geräte unterstützen kein "toggle", sondern nur turnOn/turnOff
+    case 0: return F("toggle"); 
     case 1: return F("turnOn");
     case 2: return F("turnOff");
     default: return F("toggle");
