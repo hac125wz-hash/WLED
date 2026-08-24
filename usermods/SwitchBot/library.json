@@ -4,10 +4,7 @@
   "description": "SwitchBot Integration fuer WLED",
   "frameworks": "arduino",
   "platforms": [ "espressif32", "espressif8266" ],
-  "build": {
-    "flags": [
-      "-D USERMOD_SWITCHBOT"
-    ]
-  },
+  "build": {"libArchive": false}
   "dependencies": {}
 }
+  
