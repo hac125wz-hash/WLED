@@ -5,8 +5,6 @@
  * 
  * This usermod allows controlling SwitchBot devices via button press
  * Supports local control via SwitchBot Hub API
- * 
- * Written for WLED with v2 usermod API
  */
 
 #ifndef SWITCHBOT_MAX_DEVICES
@@ -29,11 +27,10 @@ class SwitchBotControl : public Usermod {
     // Configuration
     String hubIP = "";                                    // SwitchBot Hub IP address
     String apiToken = "";                                 // API token for authentication
-    uint16_t httpTimeout = 5000;                          // HTTP request timeout in ms
     
     SwitchBotDevice devices[SWITCHBOT_MAX_DEVICES];
     unsigned long lastRequestTime = 0;
-    uint16_t minRequestInterval = 500;                    // Minimum time between requests (ms)
+    uint16_t minRequestInterval = 1000;                   // Mindestabstand zwischen API-Sende-Befehlen (ms)
     
     static const char _name[];
     static const char _enabled[];
@@ -45,100 +42,70 @@ class SwitchBotControl : public Usermod {
 
     // Private methods
     bool sendSwitchBotCommand(const String& deviceId, uint8_t action);
-    bool isButtonPressed(uint8_t buttonIndex);
     String getActionString(uint8_t action);
 
   public:
-    /**
-     * Enable/Disable the usermod
-     */
     inline void enable(bool en) { enabled = en; }
-
-    /**
-     * Get usermod enabled/disabled state
-     */
     inline bool isEnabled() { return enabled; }
 
-    /**
-     * getId() - Return unique usermod ID
-     */
     uint16_t getId() override {
-      return USERMOD_ID_UNSPECIFIED;  // Could be assigned a unique ID in const.h
+      return USERMOD_ID_UNSPECIFIED;
     }
 
-    /**
-     * setup() - Initialize the usermod
-     */
     void setup() override {
-      // Initialize devices array
       for (int i = 0; i < SWITCHBOT_MAX_DEVICES; i++) {
         devices[i].deviceId = "";
-        devices[i].buttonPin = 255;  // 255 = unused
+        devices[i].buttonPin = 255;  // 255 = ungenutzt
         devices[i].action = 0;       // toggle
         devices[i].enabled = false;
       }
       initDone = true;
     }
 
-    /**
-     * connected() - Called when WiFi connects
-     */
     void connected() override {
       DEBUG_PRINTLN(F("SwitchBot: WiFi connected"));
     }
 
-    /**
-     * loop() - Main loop, check for button presses
+    /* 
+     * Der loop() bleibt leer! Das spart enorme Rechenleistung, 
+     * da wir stattdessen Event-basiert arbeiten.
      */
     void loop() override {
-      if (!enabled || !initDone || hubIP.isEmpty()) return;
+      // Leer gelassen für maximale Performance
+    }
+
+    /**
+     * handleButton() - Event-basierte Tasterabfrage (Reagiert nur bei Klick!)
+     */
+    bool handleButton(uint8_t b) override {
+      if (!enabled || !initDone || hubIP.isEmpty()) return false;
       
-      yield();
+      bool handled = false;
       
-      // Check each device's button
+      // Prüfen, ob der gedrückte Button einem SwitchBot-Gerät zugeordnet ist
       for (int i = 0; i < SWITCHBOT_MAX_DEVICES; i++) {
-        if (!devices[i].enabled || devices[i].buttonPin >= WLED_MAX_BUTTONS) continue;
-        
-        // Check if button was just pressed
-        if (isButtonPressed(devices[i].buttonPin)) {
-          // Respect minimum request interval
+        if (devices[i].enabled && devices[i].buttonPin == b) {
+          
+          // Spam-Schutz: Verhindert Mehrfach-Auslösungen beim Prellen des Tasters
           if (millis() - lastRequestTime > minRequestInterval) {
             sendSwitchBotCommand(devices[i].deviceId, devices[i].action);
             lastRequestTime = millis();
           }
-        }
-      }
-    }
-
-    /**
-     * handleButton() - Override button behavior
-     */
-    bool handleButton(uint8_t b) override {
-      if (!enabled || !initDone) return false;
-      
-      bool handled = false;
-      for (int i = 0; i < SWITCHBOT_MAX_DEVICES; i++) {
-        if (devices[i].enabled && devices[i].buttonPin == b) {
-          handled = true;
+          
+          handled = true; // WLED mitteilen, dass wir den Klick verarbeitet haben
           break;
         }
       }
       
-      return handled;  // Return true to prevent default behavior
+      return handled; 
     }
 
-    /**
-     * addToJsonInfo() - Add info to JSON API
-     */
     void addToJsonInfo(JsonObject& root) override {
       if (!enabled) return;
-      
       JsonObject user = root["u"];
       if (user.isNull()) user = root.createNestedObject("u");
-      
       JsonArray info = user.createNestedArray(FPSTR(_name));
       info.add(F("SwitchBot"));
-      
       int activeDevices = 0;
       for (int i = 0; i < SWITCHBOT_MAX_DEVICES; i++) {
         if (devices[i].enabled) activeDevices++;
@@ -147,9 +114,6 @@ class SwitchBotControl : public Usermod {
       info.add(F(" devices"));
     }
 
-    /**
-     * addToConfig() - Save config to cfg.json
-     */
     void addToConfig(JsonObject& root) override {
       JsonObject top = root.createNestedObject(FPSTR(_name));
       top[FPSTR(_enabled)] = enabled;
@@ -165,19 +129,11 @@ class SwitchBotControl : public Usermod {
         device[FPSTR(_action)] = devices[i].action;
         device["enabled"] = devices[i].enabled;
       }
-      
-      DEBUG_PRINTLN(F("SwitchBot config saved."));
     }
 
-    /**
-     * readFromConfig() - Load config from cfg.json
-     */
     bool readFromConfig(JsonObject& root) override {
       JsonObject top = root[FPSTR(_name)];
-      if (top.isNull()) {
-        DEBUG_PRINTLN(F("SwitchBot: No config found."));
-        return false;
-      }
+      if (top.isNull()) return false;
       
       enabled = top[FPSTR(_enabled)] | false;
       hubIP = top[FPSTR(_hubIP)] | "";
@@ -195,21 +151,15 @@ class SwitchBotControl : public Usermod {
           devices[i].enabled = device["enabled"] | false;
         }
       }
-      
-      DEBUG_PRINTLN(F("SwitchBot config loaded."));
       return true;
     }
 
-    /**
-     * appendConfigData() - Add UI hints
-     */
     void appendConfigData() override {
       oappend(F("addInfo('SwitchBot:hubIP',1,'Local IP address of SwitchBot Hub');"));
       oappend(F("addInfo('SwitchBot:apiToken',1,'API token for authentication');"));
     }
 };
 
-// Static strings for flash memory saving
 const char SwitchBotControl::_name[] PROGMEM = "SwitchBot";
 const char SwitchBotControl::_enabled[] PROGMEM = "enabled";
 const char SwitchBotControl::_hubIP[] PROGMEM = "hubIP";
@@ -218,64 +168,25 @@ const char SwitchBotControl::_deviceId[] PROGMEM = "deviceId";
 const char SwitchBotControl::_buttonPin[] PROGMEM = "buttonPin";
 const char SwitchBotControl::_action[] PROGMEM = "action";
 
-// Private method implementations
-
 /**
  * Send command to SwitchBot device via Hub
- * Supports local API calls
  */
 bool SwitchBotControl::sendSwitchBotCommand(const String& deviceId, uint8_t action) {
-  if (deviceId.isEmpty() || hubIP.isEmpty()) {
-    DEBUG_PRINTLN(F("SwitchBot: Missing device ID or Hub IP"));
+  if (deviceId.isEmpty() || hubIP.isEmpty() || !WLED_CONNECTED) {
     return false;
   }
   
-  if (!WLED_CONNECTED) {
-    DEBUG_PRINTLN(F("SwitchBot: Not connected to WiFi"));
-    return false;
-  }
-  
-  // Build HTTP request for SwitchBot Hub local API
-  String url = "http://" + hubIP + "/commands";
-  
-  // Create JSON payload
-  StaticJsonDocument<256> doc;
-  doc["deviceId"] = deviceId;
-  doc["command"] = getActionString(action);
-  doc["parameter"] = "default";
-  
-  String payload;
-  serializeJson(doc, payload);
-  
-  DEBUG_PRINT(F("SwitchBot: Sending command to "));
-  DEBUG_PRINT(deviceId);
-  DEBUG_PRINT(F(" - Action: "));
-  DEBUG_PRINTLN(getActionString(action));
-  
-  // Note: Actual HTTP request implementation would require AsyncWebClient
-  // or similar HTTP client library. This is a placeholder structure.
-  // In production, you would use:
-  // HTTPClient http;
-  // http.begin(url);
-  // int httpCode = http.POST(payload);
-  // http.end();
-  
+  DEBUG_PRINT(F("SwitchBot: Command triggered for "));
+  DEBUG_PRINTLN(deviceId);
+
+  // WICHTIGER HINWEIS:
+  // Sobald du hier echten HTTP-Sende-Code (z.B. HTTPClient) einbaust,
+  // achte darauf, einen kurzen Timeout (z.B. 1000ms) zu setzen,
+  // damit die LED-Effekte während des Netzwerkaufrufs nicht stocken.
+
   return true;
 }
 
-/**
- * Check if a button was just pressed
- */
-bool SwitchBotControl::isButtonPressed(uint8_t buttonIndex) {
-  if (buttonIndex >= WLED_MAX_BUTTONS) return false;
-  
-  // Check if button is currently pressed
-  return isButtonPressed(buttonIndex);  // Uses WLED's button state
-}
-
-/**
- * Convert action number to string
- */
 String SwitchBotControl::getActionString(uint8_t action) {
   switch (action) {
     case 0: return F("toggle");
@@ -285,6 +196,5 @@ String SwitchBotControl::getActionString(uint8_t action) {
   }
 }
 
-// Create and register the usermod
 static SwitchBotControl switchbotControl;
 REGISTER_USERMOD(switchbotControl);
