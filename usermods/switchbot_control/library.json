@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "description": "Usermod to control SwitchBot devices via button press",
   "frameworks": "arduino",
-  "platforms": "espressif32", 
-  "build": "libArchive": false
+  "platforms": "espressif32",
+  "build": {
+    "libArchive": false
+  }
 }
