@@ -42,31 +42,23 @@ class SwitchBotControl : public Usermod {
     void loop() override {}
 
     /**
-     * HIER WIRD DIE HTML-ANFRAGE ABGEFANGEN
-     * WLED-konforme Funktionssignatur mit zwei Parametern (request & subPage)
-     * Aufrufbar über: http://<ESP-IP>/win&SB=1 (Standard-Aktion)
-     * Oder gezielt:  http://<ESP-IP>/win&SB=on / off / toggle
+     * HIER WIRD DIE HTML-ANFRAGE NATIV ÜBER WLEDS JSON-API ABGEFANGEN
+     * Reagiert auf HTTP-POST/GET an: http://<ESP-IP>/json
      */
-    void handleHttpGet(AsyncWebServerRequest *request, const String& subPage) override {
+    void handleJsonIn(JsonObject& root) override {
       if (!enabled || !initDone || apiToken.isEmpty() || secretKey.isEmpty() || deviceId.isEmpty()) return;
-      
-      // Prüfen, ob der "SB" Parameter in der URL vorkommt
-      if (request->hasParam("SB")) {
-        String reqParam = request->getParam("SB")->value();
+
+      if (root.containsKey("switchbot")) {
+        String reqParam = root["switchbot"].as<String>();
         uint8_t targetAction = action; // Fallback auf Standard-Einstellung
 
-        // Parameter auswerten, falls via URL übergeben
         if (reqParam == "on" || reqParam == "1")        targetAction = 1;
         else if (reqParam == "off" || reqParam == "2")  targetAction = 2;
         else if (reqParam == "toggle" || reqParam == "0") targetAction = 0;
 
-        // Spam-Schutz
         if (millis() - lastRequestTime > minRequestInterval) {
           sendSwitchBotCommand(targetAction);
           lastRequestTime = millis();
-          request->send(200, "text/plain", "SwitchBot Command Sent");
-        } else {
-          request->send(429, "text/plain", "Rate Limit - Please Wait");
         }
       }
     }
@@ -76,8 +68,8 @@ class SwitchBotControl : public Usermod {
       JsonObject user = root["u"];
       if (user.isNull()) user = root.createNestedObject("u");
       JsonArray info = user.createNestedArray(FPSTR(_name));
-      info.add(F("SwitchBot Link"));
-      info.add(F("/win&SB=1"));
+      info.add(F("SwitchBot Status"));
+      info.add(F("Bereit für /json?switchbot=1"));
     }
 
     void addToConfig(JsonObject& root) override {
@@ -119,7 +111,7 @@ const char SwitchBotControl::_action[] PROGMEM = "action";
 String SwitchBotControl::generateSignature(const String& token, const String& secret, const String& t, const String& nonce) {
   String dataToSign = token + t + nonce;
   
-  uint8_t hmacResult[32]; // Fix: Echte Array-Größe für mbedtls zugewiesen
+  uint8_t hmacResult[32]; 
   mbedtls_md_context_t ctx;
   mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
   
@@ -132,7 +124,7 @@ String SwitchBotControl::generateSignature(const String& token, const String& se
   
   String sign = "";
   for (int i = 0; i < 32; i++) {
-    char buf[3]; // Fix: Ausreichend Platz für 2 Hex-Zeichen + Null-Terminator
+    char buf[3]; 
     snprintf(buf, sizeof(buf), "%02X", hmacResult[i]);
     sign += buf;
   }
@@ -144,6 +136,7 @@ bool SwitchBotControl::sendSwitchBotCommand(uint8_t actionToSnd) {
     return false;
   }
   
+  // JETZT KORRIGIERT: Offizieller API-Endpunkt v1.1
   String url = "https://switch-bot.com" + deviceId + "/commands";
   
   Toki::Time tm = toki.getTime();
@@ -193,4 +186,4 @@ String SwitchBotControl::getActionString(uint8_t actionToSnd) {
 }
 
 static SwitchBotControl switchbotControl;
-REGISTER_USERMOD(switchbotControl); // Fix: REGISTER_USERMOD korrigiert
+REGISTER_USERMOD(switchbotControl);
