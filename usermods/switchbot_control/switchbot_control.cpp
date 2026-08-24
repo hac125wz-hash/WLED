@@ -46,10 +46,8 @@ class SwitchBotControl : public Usermod {
      * Aufrufbar über: http://<ESP-IP>/win&SB=1 (Standard-Aktion)
      * Oder gezielt:  http://<ESP-IP>/win&SB=on / off / toggle
      */
-    bool handleHttpGet(AsyncWebServerRequest *request) override {
-      if (!enabled || !initDone || apiToken.isEmpty() || secretKey.isEmpty() || deviceId.isEmpty()) return false;
-
-      bool handled = false;
+    void handleHttpGet(AsyncWebServerRequest *request) override {
+      if (!enabled || !initDone || apiToken.isEmpty() || secretKey.isEmpty() || deviceId.isEmpty()) return;
       
       // Prüfen, ob der "SB" Parameter in der URL vorkommt
       if (request->hasParam("SB")) {
@@ -69,11 +67,7 @@ class SwitchBotControl : public Usermod {
         } else {
           request->send(429, "text/plain", "Rate Limit - Please Wait");
         }
-        
-        handled = true;
       }
-      
-      return handled;
     }
 
     void addToJsonInfo(JsonObject& root) override {
@@ -124,7 +118,7 @@ const char SwitchBotControl::_action[] PROGMEM = "action";
 String SwitchBotControl::generateSignature(const String& token, const String& secret, const String& t, const String& nonce) {
   String dataToSign = token + t + nonce;
   
-  uint8_t hmacResult[32]; // Fix: Array-Größe explizit definiert
+  uint8_t hmacResult[32]; // Fix: Explizite Array-Größe für mbedtls hinzugefügt
   mbedtls_md_context_t ctx;
   mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
   
@@ -137,7 +131,7 @@ String SwitchBotControl::generateSignature(const String& token, const String& se
   
   String sign = "";
   for (int i = 0; i < 32; i++) {
-    char buf[3]; // Fix: Buffer-Größe für Hex-Wandlung definiert
+    char buf[3];
     snprintf(buf, sizeof(buf), "%02X", hmacResult[i]);
     sign += buf;
   }
@@ -198,4 +192,4 @@ String SwitchBotControl::getActionString(uint8_t actionToSnd) {
 }
 
 static SwitchBotControl switchbotControl;
-REGISTER_USERMOD(switchbotControl); // Fix: Großschreibung korrigiert
+REGISTER_USERMOD(switchbotControl);
