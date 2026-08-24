@@ -1,3 +1,4 @@
+#include "wled.h"
 #include "SwitchBotUsermod.h"
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
