@@ -1,0 +1,5 @@
+{
+  "name": "switchbot_control",
+  "version": "1.0.0",
+  "description": "Usermod to control SwitchBot devices via button press"
+}
