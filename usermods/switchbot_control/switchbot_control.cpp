@@ -42,13 +42,16 @@ class SwitchBotControl : public Usermod {
     void loop() override {}
 
     /**
-     * Gemeinsame Logik für die Verarbeitung der JSON-Abfrage
+     * NATIVE WLED HTTP-GET INTERFACE
+     * Fängt Web-Aufrufe über den Standard /win Pfad ab.
+     * Aufrufbar im Browser über: http://<ESP-IP>/win&SB=toggle
      */
-    void processSwitchBotJson(JsonObject& root) {
+    void handleHttpGet(AsyncWebServerRequest *request) override {
       if (!enabled || !initDone || apiToken.isEmpty() || secretKey.isEmpty() || deviceId.isEmpty()) return;
 
-      if (root.containsKey("switchbot")) {
-        String reqParam = root["switchbot"].as<String>();
+      // Prüfen, ob der "SB" Parameter in der URL vorkommt
+      if (request->hasParam("SB")) {
+        String reqParam = request->getParam("SB")->value();
         uint8_t targetAction = action; // Fallback auf Standard-Einstellung
 
         if (reqParam == "on" || reqParam == "1")        targetAction = 1;
@@ -58,23 +61,11 @@ class SwitchBotControl : public Usermod {
         if (millis() - lastRequestTime > minRequestInterval) {
           sendSwitchBotCommand(targetAction);
           lastRequestTime = millis();
+          request->send(200, "text/plain", "SwitchBot Command Sent");
+        } else {
+          request->send(429, "text/plain", "Rate Limit - Please Wait");
         }
       }
-    }
-
-    /**
-     * HIER WIRD DIE HTML-ANFRAGE NATIV ÜBER WLEDS JSON-API ABGEFANGEN
-     * WLED Versionen mit 1 Parameter
-     */
-    void handleJsonIn(JsonObject& root) override {
-      processSwitchBotJson(root);
-    }
-
-    /**
-     * WLED Versionen mit 2 Parametern
-     */
-    void handleJsonIn(JsonObject& root, JsonObject& changeState) override {
-      processSwitchBotJson(root);
     }
 
     void addToJsonInfo(JsonObject& root) override {
@@ -82,8 +73,8 @@ class SwitchBotControl : public Usermod {
       JsonObject user = root["u"];
       if (user.isNull()) user = root.createNestedObject("u");
       JsonArray info = user.createNestedArray(FPSTR(_name));
-      info.add(F("SwitchBot Status"));
-      info.add(F("Bereit für /json?switchbot=1"));
+      info.add(F("SwitchBot Link"));
+      info.add(F("Bereit für /win&SB=toggle"));
     }
 
     void addToConfig(JsonObject& root) override {
