@@ -18,7 +18,6 @@
 
 #include "wled.h"
 #include <HTTPClient.h>
-#include <ArduinoJson.h>
 
 class SwitchBotPM1Cloud : public Usermod {
 private:
