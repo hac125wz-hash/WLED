@@ -124,7 +124,7 @@ const char SwitchBotControl::_action[] PROGMEM = "action";
 String SwitchBotControl::generateSignature(const String& token, const String& secret, const String& t, const String& nonce) {
   String dataToSign = token + t + nonce;
   
-  uint8_t hmacResult[32]; 
+  uint8_t hmacResult[32]; // Fix: Array-Größe explizit definiert
   mbedtls_md_context_t ctx;
   mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
   
@@ -137,8 +137,8 @@ String SwitchBotControl::generateSignature(const String& token, const String& se
   
   String sign = "";
   for (int i = 0; i < 32; i++) {
-    char buf[3];
-    sprintf(buf, "%02X", hmacResult[i]);
+    char buf[3]; // Fix: Buffer-Größe für Hex-Wandlung definiert
+    snprintf(buf, sizeof(buf), "%02X", hmacResult[i]);
     sign += buf;
   }
   return sign;
@@ -198,4 +198,4 @@ String SwitchBotControl::getActionString(uint8_t actionToSnd) {
 }
 
 static SwitchBotControl switchbotControl;
-REGISTER_USERMod(switchbotControl);
+REGISTER_USERMOD(switchbotControl); // Fix: Großschreibung korrigiert
