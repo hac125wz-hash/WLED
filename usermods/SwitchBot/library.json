@@ -10,5 +10,6 @@
       "-D USERMOD_SWITCHBOT"
     ]
   },
-  "dependencies": {}
+  "dependencies": {},
+  "libLDFMode": "deep+"
 }
