@@ -11,12 +11,15 @@ private:
   String lastStatus = "unknown";
 
   void fetchDeviceStatus();
+  void sendCommand(const char* command);
 
 public:
   SwitchBotUsermod();
   void setup() override;
   void loop() override;
   void addToJsonInfo(JsonObject &root) override;
-	bool readFromConfig(JsonObject &root) override;
+  bool readFromConfig(JsonObject &root) override;
   void addToConfig(JsonObject &root) override;
+  void addToJsonState(JsonObject &root) override;
+  bool readFromJsonState(JsonObject &root) override;
 };
